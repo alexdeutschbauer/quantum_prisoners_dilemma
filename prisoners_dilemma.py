@@ -12,10 +12,10 @@ class PrisonersDilemma:
         self.sim = QuantumSimulator()
         self.sentence = ['Alice and Bob both get 1 year.', 'Alice gets 5 years and Bob goes free.', 'Alice goes free and Bob gets 5 years.', 'Alice and Bob both get 3 years.']
         self.quantum_11 = (1/np.sqrt(2)) * (np.array([1, 0, 0, 0]) + 1.j * np.array([0, 0, 0, 1]))
-        self.quantum_50 = (1/np.sqrt(2)) * (np.array([0, 0, 1, 0]) - 1.j * np.array([0, 1, 0, 0]))
-        self.quantum_05 = (1/np.sqrt(2)) * (np.array([0, 1, 0, 0]) - 1.j * np.array([0, 0, 1, 0]))
+        self.quantum_50 = (1/np.sqrt(2)) * (np.array([0, 1, 0, 0]) - 1.j * np.array([0, 0, 1, 0]))
+        self.quantum_05 = (1/np.sqrt(2)) * (np.array([0, 0, 1, 0]) - 1.j * np.array([0, 1, 0, 0]))
         self.quantum_33 = (1/np.sqrt(2)) * (1.j * np.array([1, 0, 0, 0]) + np.array([0, 0, 0, 1]))
-        self.final_states = np.array([self.quantum_11, self.quantum_05, self.quantum_50, self.quantum_33])
+        self.final_states = np.array([self.quantum_11, self.quantum_50, self.quantum_05, self.quantum_33])
     
     def classical(self, alice_deflects, bob_deflects):
         init_state = self.sim.multikron([self.sim.zero] * 2)
@@ -43,14 +43,8 @@ class PrisonersDilemma:
         bob_gate = -1.j * self.sim.Y if bob_deflects else self.sim.I
         combined_gate = self.sim.combine_gates(alice_gate, bob_gate)
         final_state =  self.sim.apply_gate(combined_gate, init_state)
-        print(np.allclose(final_state, (1/np.sqrt(2)) * ((combined_gate @ np.array([1, 0, 0, 0])) + 1.j * (combined_gate @ np.array([0, 0, 0, 1])))))
-        print(np.allclose(final_state, (1/np.sqrt(2)) * (np.kron(alice_gate @ self.sim.zero, bob_gate @ self.sim.zero) + np.kron(1.j * alice_gate @ self.sim.one, bob_gate @ self.sim.one))))
-        print(np.allclose(final_state, (1/np.sqrt(2)) * ((1/np.sqrt(2)) * np.kron((1.j * self.sim.zero + self.sim.one), self.sim.zero) + (1/np.sqrt(2)) * 1.j * np.kron((-self.sim.zero - 1.j * self.sim.one), -self.sim.one))))
-        print(final_state)
         if np.allclose(final_state, (1/np.sqrt(2)) * (self.quantum_33 + self.quantum_05)) or np.allclose(final_state, (1/np.sqrt(2)) * (self.quantum_33 - self.quantum_05)):
-            print(True)
-        else:
-            print(False)
+            return np.random.choice([self.sentence[2], self.sentence[3]])
 
     def run_app(self):
         st.title('Quantum Prisoner\'s Dilemma')

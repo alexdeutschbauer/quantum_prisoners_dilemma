@@ -1,6 +1,7 @@
 from quantum_simulator import QuantumSimulator
 import numpy as np
 import streamlit as st
+from scipy.linalg import expm
 
 
 class PrisonersDilemma:
@@ -11,66 +12,104 @@ class PrisonersDilemma:
     def __init__(self):
         self.sim = QuantumSimulator()
         self.sentence = ['Alice and Bob both get 1 year.', 'Alice gets 5 years and Bob goes free.', 'Alice goes free and Bob gets 5 years.', 'Alice and Bob both get 3 years.']
-        self.quantum_11 = (1/np.sqrt(2)) * (np.array([1, 0, 0, 0]) + 1.j * np.array([0, 0, 0, 1]))
-        self.quantum_50 = (1/np.sqrt(2)) * (np.array([0, 1, 0, 0]) - 1.j * np.array([0, 0, 1, 0]))
-        self.quantum_05 = (1/np.sqrt(2)) * (np.array([0, 0, 1, 0]) - 1.j * np.array([0, 1, 0, 0]))
-        self.quantum_33 = (1/np.sqrt(2)) * (1.j * np.array([1, 0, 0, 0]) + np.array([0, 0, 0, 1]))
-        self.final_states = np.array([self.quantum_11, self.quantum_50, self.quantum_05, self.quantum_33])
+        self.C = self.sim.I
+        self.D = np.array([[0, 1], 
+                    [-1, 0]])
+        self.Q = np.array([[1.j, 0], [0, -1.j]])
+        
+    def get_probs(self, alice_gate, bob_gate, init_state, J=np.eye(4)):
+        combined_gate = self.sim.combine_gates(alice_gate, bob_gate)
+        inter_state = self.sim.apply_gate(J, init_state)
+        inter_state =  self.sim.apply_gate(combined_gate, inter_state)
+        final_state = self.sim.apply_gate(J.T.conj(), inter_state)
+        return self.sim.calculate_measurement_probabilitites(final_state)
     
     def classical(self, alice_deflects, bob_deflects):
         init_state = self.sim.multikron([self.sim.zero] * 2)
-        alice_gate = self.sim.X if alice_deflects else self.sim.I
-        bob_gate = self.sim.X if bob_deflects else self.sim.I
-        combined_gate = self.sim.combine_gates(alice_gate, bob_gate)
-        final_state =  self.sim.apply_gate(combined_gate, init_state)
-        probs = self.sim.calculate_measurement_probabilitites(final_state)
-        return self.sentence[np.argmax(probs)]
+        alice_gate = self.D if alice_deflects else self.C
+        bob_gate = self.D if bob_deflects else self.C
+        probs = self.get_probs(alice_gate, bob_gate, init_state)
+        idx = np.random.choice(range(4), p=probs)
+        return self.sentence[idx], probs
     
-    def quantum(self, alice_deflects, bob_deflects):
-        init_state = self.quantum_11
-        alice_gate = -1.j * self.sim.Y if alice_deflects else self.sim.I
-        bob_gate = -1.j * self.sim.Y if bob_deflects else self.sim.I
-        combined_gate = self.sim.combine_gates(alice_gate, bob_gate)
-        final_state =  self.sim.apply_gate(combined_gate, init_state)
-        for index, state in enumerate(self.final_states):
-            if np.allclose(state, final_state):
-                break
-        return self.sentence[index]
+    def quantum(self, alice_deflects, bob_deflects, gamma):
+        init_state = self.sim.multikron([self.sim.zero] * 2)
+        J = expm(np.kron(-1.j * gamma * self.D, self.D / 2))
+        alice_gate = self.D if alice_deflects else self.C
+        bob_gate = self.D if bob_deflects else self.C
+        probs = self.get_probs(alice_gate, bob_gate, init_state, J)
+        idx = np.random.choice(range(4), p=probs)
+        return self.sentence[idx], probs
 
-    def magic(self, bob_deflects):
-        init_state = self.quantum_11
+    def alice_m(self, bob_deflects, gamma):
+        init_state = self.sim.multikron([self.sim.zero] * 2)
+        J = expm(np.kron(-1.j * gamma * self.D, self.D / 2))
         alice_gate = self.sim.composite_gate([self.sim.S, self.sim.H, self.sim.Y, self.sim.S, self.sim.Z])
         bob_gate = -1.j * self.sim.Y if bob_deflects else self.sim.I
-        combined_gate = self.sim.combine_gates(alice_gate, bob_gate)
-        final_state =  self.sim.apply_gate(combined_gate, init_state)
-        if np.allclose(final_state, (1/np.sqrt(2)) * (self.quantum_33 + self.quantum_05)) or np.allclose(final_state, (1/np.sqrt(2)) * (self.quantum_33 - self.quantum_05)):
-            return np.random.choice([self.sentence[2], self.sentence[3]])
+        probs = self.get_probs(alice_gate, bob_gate, init_state, J)
+        idx = np.random.choice(range(4), p=probs)
+        return self.sentence[idx], probs
+    
+    def both_q(self, gamma):
+        init_state = self.sim.multikron([self.sim.zero] * 2)
+        J = expm(np.kron(-1.j * gamma * self.D, self.D / 2))
+        alice_gate = self.Q
+        bob_gate = self.Q
+        probs = self.get_probs(alice_gate, bob_gate, init_state, J)
+        idx = np.random.choice(range(4), p=probs)
+        return self.sentence[idx], probs
+
+    def write_output(self, sentence, probs):
+        st.write("### Results")
+        results = {"Probability": probs, "Sentence": self.sentence}
+        st.table(results)
+        st.write(f'#### {sentence}')
 
     def run_app(self):
+        st.set_page_config(layout="wide")
         st.title('Quantum Prisoner\'s Dilemma')
-        col1, col2 = st.columns([0.6, 0.4])
+        col1, col2, _ = st.columns([0.4, 0.4, 0.2])
         with col1:
             st.image('prisoners_dilemma.webp', use_container_width=True)
         with col2:
-            technology = st.pills(r'$\textsf{Used Technology}$', ['classical', 'quantum'], default='classical')
-            if technology == 'classical':
-                alice = st.radio(r'$\textsf{Alice}$', ['confess', 'deflect'], index=0)
-                bob = st.radio(r'$\textsf{Bob}$', ['confess', 'deflect'], index=0)
-            if technology == 'quantum':
-                magic = st.toggle('Magic Gate')
+            technology_options = [r'$\textsf{classical}$', r'$\textsf{quantum}$']
+            answer_otions = [r'$\textsf{confess}$', r'$\textsf{deflect}$']
+            st.write(r'### $\textsf{Used Technology}$')
+            technology = st.pills('', technology_options, default=technology_options[0], label_visibility='collapsed')
+            if technology == technology_options[0]:
+                st.write(r'#### Alice')
+                alice = st.radio('Alice', answer_otions, index=0, label_visibility='collapsed')
+                st.write(r'#### Bob')
+                bob = st.radio('Bob', answer_otions, index=0, label_visibility='collapsed')
+            elif technology == technology_options[1]:
+                gamma = st.slider(r'$\gamma$', 0.0, np.pi / 2, np.pi / 2)
+                magic = st.toggle(r'$\textsf{Allow Magic Gates}$')
                 if magic:
-                    bob = st.radio(r'$\textsf{Bob}$', ['confess', 'deflect'], index=0)
+                    magic_options = [r'$\textsf{Alice applies } M$', r'$\textsf{Both apply }Q$']
+                    magic_choice = st.radio(r'', magic_options, index=0, label_visibility='collapsed')
+                    if magic_choice == magic_options[0]:
+                        st.write(r'#### Bob')
+                        bob = st.radio('Bob', answer_otions, index=0, label_visibility='collapsed')
                 else:
-                    alice = st.radio(r'$\textsf{Alice}$', ['confess', 'deflect'], index=0)
-                    bob = st.radio(r'$\textsf{Bob}$', ['confess', 'deflect'], index=0)
+                    st.write(r'#### Alice')
+                    alice = st.radio('Alice', answer_otions, index=0, label_visibility='collapsed')
+                    st.write(r'#### Bob')
+                    bob = st.radio('Bob', answer_otions, index=0, label_visibility='collapsed')
             if st.button('Run'):
-                if technology == 'classical':
-                    st.write(self.classical(alice == 'deflect', bob == 'deflect'))
-                if technology == 'quantum':
+                if technology == technology_options[0]:
+                    sentence, probs = self.classical(alice ==  answer_otions[1], bob ==  answer_otions[1])
+                    self.write_output(sentence, probs)
+                if technology == technology_options[1]:
                     if magic:
-                        st.write(self.magic(bob == 'deflect'))
+                        if magic_choice == magic_options[1]:
+                            sentence, probs = self.both_q(gamma)
+                            self.write_output(sentence, probs)
+                        else:
+                            sentence, probs = self.alice_m(bob ==  answer_otions[1], gamma)
+                            self.write_output(sentence, probs)
                     else:
-                        st.write(self.quantum(alice == 'deflect', bob == 'deflect'))
+                        sentence, probs = self.quantum(alice == answer_otions[1], bob ==  answer_otions[1], gamma)
+                        self.write_output(sentence, probs)
 
 if __name__ == "__main__":
     pd = PrisonersDilemma()

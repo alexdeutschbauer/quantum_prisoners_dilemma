@@ -75,7 +75,7 @@ class PrisonersDilemma:
             technology_options = [r'$\textsf{classical}$', r'$\textsf{quantum}$']
             answer_otions = [r'$\textsf{confess}$', r'$\textsf{deflect}$']
             st.write(r'### $\textsf{Used Technology}$')
-            technology = st.pills('', technology_options, default=technology_options[0], label_visibility='collapsed')
+            technology = st.pills('Technology', technology_options, default=technology_options[0], label_visibility='collapsed')
             if technology == technology_options[0]:
                 st.write(r'#### Alice')
                 alice = st.radio('Alice', answer_otions, index=0, label_visibility='collapsed')
@@ -85,9 +85,9 @@ class PrisonersDilemma:
                 gamma = st.slider(r'$\gamma$', 0.0, np.pi / 2, np.pi / 2)
                 magic = st.toggle(r'$\textsf{Allow Magic Gates}$')
                 if magic:
-                    magic_options = [r'$\textsf{Alice applies } M$', r'$\textsf{Both apply }Q$']
-                    magic_choice = st.radio(r'', magic_options, index=0, label_visibility='collapsed')
-                    if magic_choice == magic_options[0]:
+                    magic_options = [r'$\textsf{Both apply }Q$', r'$\textsf{Alice applies } M$']
+                    magic_choice = st.radio('Magic', magic_options, index=0, label_visibility='collapsed')
+                    if magic_choice == magic_options[1]:
                         st.write(r'#### Bob')
                         bob = st.radio('Bob', answer_otions, index=0, label_visibility='collapsed')
                 else:
@@ -101,7 +101,7 @@ class PrisonersDilemma:
                     self.write_output(sentence, probs)
                 if technology == technology_options[1]:
                     if magic:
-                        if magic_choice == magic_options[1]:
+                        if magic_choice == magic_options[0]:
                             sentence, probs = self.both_q(gamma)
                             self.write_output(sentence, probs)
                         else:

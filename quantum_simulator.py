@@ -90,10 +90,6 @@ class QuantumSimulator:
     def are_commuting(self, A, B) -> bool:
         return np.allclose(np.dot(A, B), np.dot(B, A))
     
-    def kronecker(self, A, B) -> np.ndarray:
-        # without using np.kron
-        return np.vstack([np.hstack([A[i, j] * B for j in range(B.shape[1])]) for i in range(A.shape[0])])
-    
     def combine_states(self, state1, state2) -> np.ndarray:
         return np.kron(state1, state2)
     
@@ -140,13 +136,13 @@ class QuantumSimulator:
         gate = self.composite_gate([np.linalg.matrix_power(self.X, int(sending_bits[1])), np.linalg.matrix_power(self.Z, int(sending_bits[0]))])
         return self.combine_gates(gate, self.I) @ initial_state
 
-    def reverse_entanglement(self, received_state): #1
+    def reverse_entanglement(self, received_state):
         return self.Bell_Measurement_Gate @ received_state
 
-    def readout(self, final_qstate): #2
+    def readout(self, final_qstate):
         return self.calculate_measurement_probabilitites(final_qstate)
 
-    def decode(self, probs): #3
+    def decode(self, probs):
         mask_outcome = np.isclose(probs, 1)
         ALL_2B_OUTCOMES = np.array([['00'], ['01'], ['10'], ['11']])
         return ALL_2B_OUTCOMES[mask_outcome]
@@ -164,124 +160,6 @@ class QuantumSimulator:
             return np.kron(self.to_dual(self.zero), self.I) @ phi / np.sqrt(p_0)
         else:
             return np.kron(self.to_dual(self.one), self.I) @ phi / np.sqrt(1 - p_0)
-
-    def t_teleportation_init(self, psi):
-        g1 = self.combine_gates(self.H, self.I)
-        g2 = self.combine_gates(self.T, self.I)
-        g3 = self.CNOT_10
-        g4 = self.CNOT_01
-        return g4 @ g3 @ g2 @ g1 @ self.combine_gates(self.zero, psi)
-    
-    def t_teleportation(self, psi):
-        phi = self.t_teleportation_init(psi) 
-        p_0 = self.compute_2q_marginal_prob_for_o0(phi)
-        o_0 = self.single_shot_from_p0(p_0)
-        phi_collapsed = self.collaps_2q_state(phi, o_0, p_0)
-        return np.linalg.matrix_power(self.X @ self.S, o_0) @ phi_collapsed
-
-    def quantum_teleportation_init(self, psi):
-        layers = [ # Create list of gates of the teleportation algorithm.
-            [self.I, self.H, self.I], 
-            [self.I, self.CNOT_01], 
-            [self.CNOT_01, self.I],
-            [self.H, self.I, self.I]
-        ]
-
-        middle_gates = np.eye(2 ** 3, dtype=np.complex128)
-        for layer in layers[::-1]:
-            middle_gates @= self.multikron(*layer)
-        return middle_gates @ self.multikron(psi, self.zero, self.zero)
-    
-    def quantum_teleportation_init_nobobaction(self, psi):
-        layers = [ # Create list of gates of the teleportation algorithm.
-            [self.CNOT_01, self.I], 
-            [self.H, self.I, self.I], 
-            [self.I, self.I, self.I],
-        ]
-
-        middle_gates = np.eye(2 ** 3, dtype=np.complex128)
-        for layer in layers[::-1]:
-            middle_gates @= self.multikron(*layer)
-        return middle_gates @ self.multikron(psi, self.zero, self.zero)
-    
-    def quantum_teleportation_init_xbobaction(self, psi):
-        layers = [ # Create list of gates of the teleportation algorithm.
-            [self.CNOT_01, self.I], 
-            [self.H, self.I, self.I], 
-            [self.I, self.I, self.X],
-        ]
-
-        middle_gates = np.eye(2 ** 3, dtype=np.complex128)
-        for layer in layers[::-1]:
-            middle_gates @= self.multikron(*layer)
-        return middle_gates @ self.multikron(psi, self.zero, self.zero)
-    
-    def quantum_teleportation_init_zxbobaction(self, psi):
-        layers = [ # Create list of gates of the teleportation algorithm.
-            [self.CNOT_01, self.I], 
-            [self.H, self.I, self.I], 
-            [self.I, self.I, self.Z],
-            [self.I, self.I, self.X],
-        ]
-
-        middle_gates = np.eye(2 ** 3, dtype=np.complex128)
-        for layer in layers[::-1]:
-            middle_gates @= self.multikron(*layer)
-        return middle_gates @ self.multikron(psi, self.zero, self.zero) 
-
-    def quantum_teleportation(self, psi):
-        # needs psi as an input.
-        phi = self.quantum_teleportation_init(psi)
-        # Do the first partial measurement
-        p0_1 = self.compute_marginal_prob0(phi, 1)
-        o1 = self.single_shot_from_p0(p0_1)
-        phi_1 = self.collaps_state(phi, o1, p0_1, 1)
-        # Do the second partial measurement.
-        p0_0 = self.compute_marginal_prob0(phi, 0)
-        o0 = self.single_shot_from_p0(p0_0)
-        phi_2 = self.collaps_state(phi_1, o0, p0_0, 0)
-        # Apply the gates depending on the outcomes of Alice.
-        Bobs_gate = np.linalg.matrix_power(self.Z, o0) @ np.linalg.matrix_power(self.X, o1)
-        return Bobs_gate @ phi_2 
-    
-    def quantum_teleportation_nobobaction(self, psi):
-        # needs psi as an input.
-        phi = self.quantum_teleportation_init_nobobaction(psi)
-        # Do the first partial measurement
-        p0_1 = self.compute_marginal_prob0(phi, 1)
-        o1 = self.single_shot_from_p0(p0_1)
-        phi_1 = self.collaps_state(phi, o1, p0_1, 1)
-        # Do the second partial measurement.
-        p0_0 = self.compute_marginal_prob0(phi, 0)
-        o0 = self.single_shot_from_p0(p0_0)
-        phi_2 = self.collaps_state(phi_1, o0, p0_0, 0)
-        return phi_2
-    
-    def quantum_teleportation_xbobaction(self, psi):
-        # needs psi as an input.
-        phi = self.quantum_teleportation_init_xbobaction(psi)
-        # Do the first partial measurement
-        p0_1 = self.compute_marginal_prob0(phi, 1)
-        o1 = self.single_shot_from_p0(p0_1)
-        phi_1 = self.collaps_state(phi, o1, p0_1, 1)
-        # Do the second partial measurement.
-        p0_0 = self.compute_marginal_prob0(phi, 0)
-        o0 = self.single_shot_from_p0(p0_0)
-        phi_2 = self.collaps_state(phi_1, o0, p0_0, 0)
-        return phi_2
-    
-    def quantum_teleportation_zxbobaction(self, psi):
-        # needs psi as an input.
-        phi = self.quantum_teleportation_init_zxbobaction(psi)
-        # Do the first partial measurement
-        p0_1 = self.compute_marginal_prob0(phi, 1)
-        o1 = self.single_shot_from_p0(p0_1)
-        phi_1 = self.collaps_state(phi, o1, p0_1, 1)
-        # Do the second partial measurement.
-        p0_0 = self.compute_marginal_prob0(phi, 0)
-        o0 = self.single_shot_from_p0(p0_0)
-        phi_2 = self.collaps_state(phi_1, o0, p0_0, 0)
-        return phi_2
     
     ### GENERALIZATION ###
 
@@ -342,17 +220,17 @@ class QuantumSimulator:
         return [format(i, f'0{nqubits}b') for i in range(2 ** nqubits)]
     
     def collaps_state_multi(self, state:np.ndarray, outcome_list:list, prob_list:list, qubit_list:list):
-        inds = np.argsort(qubit_list)[::-1] # make sure to collapse 'from the back'
+        inds = np.argsort(qubit_list)[::-1]
         for o, p, q in zip(np.array(outcome_list)[inds], np.array(prob_list)[inds], np.array(qubit_list)[inds]):
             state = self.collaps_state(state, o, p, q)
         return state
 
     def controlled_X_nqubits(self, nqubits:int, control_on_list:list, target_qubit:int):
-        M_00 = np.array([[1, 0], [0, 0]]) # |0><0|
-        M_11 = np.array([[0, 0], [0, 1]]) # |1><1|
-        Ms_array = np.array([M_00, M_11]) # for convenience. 
+        M_00 = np.array([[1, 0], [0, 0]])
+        M_11 = np.array([[0, 0], [0, 1]])
+        Ms_array = np.array([M_00, M_11])
         qubits_list = control_on_list + [target_qubit]
-        combinations = list(product([0,1], repeat = (len(qubits_list) - 1)))[:-1] # all 2 ** nqubit combinations EXEPCT of all 1s.
+        combinations = list(product([0,1], repeat = (len(qubits_list) - 1)))[:-1]
         list_M_00s_M_11s = [np.append(Ms_array[list(c)], [self.I], axis=0) for c in combinations]
         list_M_00s_M_11s.append(np.append(Ms_array[[1] * (len(qubits_list) - 1)], [self.X], axis=0)) 
         padded_layers = [self.pad_1q_gates_Is(nqubits, gate_list, qubits_list) for gate_list in list_M_00s_M_11s]
@@ -371,27 +249,3 @@ class QuantumSimulator:
         controll_on_n = self.controlled_X_nqubits(ntot, qlist_n, ntot - 1)
         left_layer = self.multikron(self.pad_1q_gates_Is(ntot, [self.H @ self.X] * n + [self.X @ self.H], qlist_n + [ntot - 1]))
         return  left_layer @ controll_on_n @ right_layer
-    
-    def compute_amplification_steps(self, ntot_inputs:int, npositive_answers:int):
-        rf = npositive_answers / ntot_inputs
-        return int(np.round(np.pi / ( 4 * np.sqrt(rf))))
-    
-    def build_oracle_exact_cover(self, clauses_list:list):
-        n = np.max(clauses_list) + 1 
-        qlist_sf = [i + n for i in range(len(clauses_list))] 
-        nqubits = n + len(clauses_list) + 1
-        final_oracle = np.eye(2 ** nqubits, dtype=np.complex128)
-        # The boolean XOR and AND realisation of clauses.
-        for count, clause in enumerate(clauses_list):
-            final_oracle = self.XORs(nqubits, clause, count + n ) @ final_oracle
-            final_oracle = self.controlled_X_nqubits(nqubits, clause, count + n ) @ final_oracle # Like big AND
-        # Mark the solutions with a -1.
-        final_oracle = self.multikron(self.pad_1q_gates_Is(nqubits, [self.H @ self.X], [nqubits - 1])) @ final_oracle
-        final_oracle = self.controlled_X_nqubits(nqubits, qlist_sf, nqubits - 1) @ final_oracle
-        final_oracle = self.multikron(self.pad_1q_gates_Is(nqubits, [self.X @ self.H], [nqubits - 1])) @ final_oracle
-        # Reverse the boolean operations (by applying them again).
-        for count, clause in enumerate(clauses_list):
-            final_oracle = self.XORs(nqubits, clause, count + n ) @ final_oracle
-            final_oracle = self.controlled_X_nqubits(nqubits, clause, count + n ) @ final_oracle
-        
-        return final_oracle
